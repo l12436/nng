@@ -1,0 +1,11 @@
+problem start: 1
+problem end: 1000
+dfs max times: 500000
+reduce max perm: 7
+pattern drop threshold: 2
+choose pixel method: MUL
+Mirror: Disable
+zhash: Disable
+ls size cut: Disable
+ls cache: Disable
+fp2: Disable

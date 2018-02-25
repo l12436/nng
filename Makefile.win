@@ -1,0 +1,58 @@
+# Project: Project1
+# Makefile created by Dev-C++ 5.11
+
+CPP      = g++.exe -D__DEBUG__
+CC       = gcc.exe -D__DEBUG__
+WINDRES  = windres.exe
+OBJ      = board.o fullyprobe.o Hash.o help.o linesolve.o main.o mirror.o options.o probsolver.o scanner.o set.o
+LINKOBJ  = board.o fullyprobe.o Hash.o help.o linesolve.o main.o mirror.o options.o probsolver.o scanner.o set.o
+LIBS     = -L"C:/Program Files (x86)/Dev-Cpp/MinGW64/lib" -L"C:/Program Files (x86)/Dev-Cpp/MinGW64/x86_64-w64-mingw32/lib" -static-libgcc -g3
+INCS     = -I"C:/Program Files (x86)/Dev-Cpp/MinGW64/include" -I"C:/Program Files (x86)/Dev-Cpp/MinGW64/x86_64-w64-mingw32/include" -I"C:/Program Files (x86)/Dev-Cpp/MinGW64/lib/gcc/x86_64-w64-mingw32/4.9.2/include"
+CXXINCS  = -I"C:/Program Files (x86)/Dev-Cpp/MinGW64/include" -I"C:/Program Files (x86)/Dev-Cpp/MinGW64/x86_64-w64-mingw32/include" -I"C:/Program Files (x86)/Dev-Cpp/MinGW64/lib/gcc/x86_64-w64-mingw32/4.9.2/include" -I"C:/Program Files (x86)/Dev-Cpp/MinGW64/lib/gcc/x86_64-w64-mingw32/4.9.2/include/c++"
+BIN      = nng.exe
+CXXFLAGS = $(CXXINCS) -g3
+CFLAGS   = $(INCS) -g3
+RM       = rm.exe -f
+
+.PHONY: all all-before all-after clean clean-custom
+
+all: all-before $(BIN) all-after
+
+clean: clean-custom
+	${RM} $(OBJ) $(BIN)
+
+$(BIN): $(OBJ)
+	$(CPP) $(LINKOBJ) -o $(BIN) $(LIBS)
+
+board.o: board.cpp
+	$(CPP) -c board.cpp -o board.o $(CXXFLAGS)
+
+fullyprobe.o: fullyprobe.cpp
+	$(CPP) -c fullyprobe.cpp -o fullyprobe.o $(CXXFLAGS)
+
+Hash.o: Hash.cpp
+	$(CPP) -c Hash.cpp -o Hash.o $(CXXFLAGS)
+
+help.o: help.cpp
+	$(CPP) -c help.cpp -o help.o $(CXXFLAGS)
+
+linesolve.o: linesolve.cpp
+	$(CPP) -c linesolve.cpp -o linesolve.o $(CXXFLAGS)
+
+main.o: main.cpp
+	$(CPP) -c main.cpp -o main.o $(CXXFLAGS)
+
+mirror.o: mirror.cpp
+	$(CPP) -c mirror.cpp -o mirror.o $(CXXFLAGS)
+
+options.o: options.cpp
+	$(CPP) -c options.cpp -o options.o $(CXXFLAGS)
+
+probsolver.o: probsolver.cpp
+	$(CPP) -c probsolver.cpp -o probsolver.o $(CXXFLAGS)
+
+scanner.o: scanner.cpp
+	$(CPP) -c scanner.cpp -o scanner.o $(CXXFLAGS)
+
+set.o: set.cpp
+	$(CPP) -c set.cpp -o set.o $(CXXFLAGS)
