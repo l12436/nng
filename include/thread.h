@@ -21,11 +21,8 @@ typedef struct {
 	int max;
 } pool_t;
 
-static pool_t pool;
-static pthread_mutex_t mutex;
-
-void getThreadResult(int threadCount);
-void addThread(void *data);
+void waitResult();
+void addThread(void *(*func) (void *), void *data);
 void freeThread();
 int initPool(int size);
 void freePool();

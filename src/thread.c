@@ -9,6 +9,10 @@ typedef struct {
 	int sum;
 } data_t;
 
+extern pool_t pool;
+extern pthread_mutex_t mutex;
+
+
 void *threadFunction(void *msg) {
 	int i = 0;
 	data_t *data = ( data_t*)msg;
@@ -26,21 +30,21 @@ void *threadFunction(void *msg) {
 	return msg;
 }
 
-void getThreadResult(int threadCount) {
+void waitResult() {
 	int i = 0;
 	
-	for (i = 0; i < threadCount; ++i) {
+	for (i = 0; i < pool.used; ++i) {
 		pthread_join(*pool.info[i].thread, (void**)&pool.info[i].ret);
 	}
 }
 
-void addThread(void *data) {
+void addThread(void *(*func) (void *), void *data) {
 	if (pool.used >= pool.max) {
 		return;
 	}
 	pthread_t *thread = (pthread_t*)malloc(sizeof(pthread_t));
 	memset(thread, 0, sizeof(pthread_t));
-	pthread_create(thread, NULL, threadFunction, data);
+	pthread_create(thread, NULL, func, data);
 	pool.info[pool.used].thread = thread;
 	pool.used++;
 }
@@ -53,16 +57,19 @@ void freeThread() {
 			pool.info[i].thread = NULL;
 		}
 	}
+	pool.used = 0;
 }
 
 int initPool(int size)
 {
 	pool.info = (thread_info_t*)malloc(sizeof(thread_info_t) * size);
 	if (pool.info == NULL) {
+		printf("Error on allocate memory");
 		return -1;
 	}
 	memset(pool.info, 0, sizeof(thread_info_t) * size);
 	pool.max = size;
+	pthread_mutex_init(&mutex, NULL);
 }
 
 void freePool()
@@ -70,11 +77,12 @@ void freePool()
 	freeThread();
 	free(pool.info);
 	pool.info = NULL;
+	pthread_mutex_destroy(&mutex);
 }
 
-static void showResult(int threadCount) {
+static void showResult() {
 	int i = 0;
-	for (i = 0; i < threadCount; ++i) {
+	for (i = 0; i < pool.used; ++i) {
 		printf("thread %d: %d\n", ((data_t*)pool.info[i].ret)->id, ((data_t*)pool.info[i].ret)->sum);
 	}
 	
@@ -95,10 +103,11 @@ static int thread_example() {
 	
 	for (i = 0; i < threadCount; ++i) {
 		data[i].id = i;
-		addThread(&data[i]);
+		addThread(threadFunction, &data[i]);
 	}
-	getThreadResult(threadCount);
-	showResult(threadCount);
+	
+	waitResult();
+	showResult();
 	
 	pthread_mutex_destroy(&mutex);
 	freeThread();

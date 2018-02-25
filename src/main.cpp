@@ -3,10 +3,13 @@
 #include <cstdlib>
 #include <ctime>
 #include <vector>
-#include <pthread.h> 
- 
+#include <pthread.h>
+
+#include "thread.h"
 #include "probsolver.h"
 #include "options.h"
+
+#define __USE_THREAD__
 
 using namespace std;
 
@@ -17,152 +20,213 @@ using namespace std;
  * clock_t is high resolution but overflow after 3600s
  * time_t support bigger range but only count by seconds
  */
- 
-int result;  //將回傳值設成void 
-void *NonogramSolverWrapper(void *solver)
+
+typedef struct {
+	Options *option;
+	int **input;
+	int id;
+	int32_t total;
+	time_t startTime;
+	clock_t startClk;
+}data_t;
+
+typedef struct {
+	clock_t *clk;
+	vector<Board> answer;
+	int total;
+} result_t;
+
+pool_t pool;
+pthread_mutex_t mutex;
+
+#ifndef __USE_THREAD__
+vector<Board> answer;
+#endif
+
+void writePerDuration ( const Options &option, int probN, time_t startTime, clock_t thisClock , clock_t startClock );
+
+void *NonogramSolverWrapper ( void *arg )
 {
- int probData;
- NonogramSolver *x_solver = (NonogramSolver *)solver;
- result = x_solver->doSolve(&probData);
- return (void *) &result;
-}
+	int probData[50 * 14];
+	data_t *data = (data_t*)arg;
+	NonogramSolver solver;
+	result_t *result = (result_t*)malloc(sizeof(result_t));
+	clock_t *clk = (clock_t*)malloc(sizeof(clock_t) * (data->option->problemEnd / data->total));
+	int i = 0;
+	
+	memset(result, 0, sizeof(result_t));
+	memset(clk, 0, (data->option->problemEnd / data->total));
+	result->clk = clk;
+	solver.setMethod ( data->option->method );
+	initialHash();	
+	
+	result->answer.resize ( (data->option->problemEnd - data->option->problemStart + 1) / data->total );
 
-void *thread_fun1(void *arg)
-{
- 
-  NonogramSolverWrapper;
- 
-  pthread_exit(NULL);
-}
- 
-void *thread_fun2(void *arg)
-{
- 
-  NonogramSolverWrapper;
+	for ( int probN = data->id + 1 ; probN <= data->option->problemEnd; probN+=data->total, ++i ) {
+		result->clk[i] = clock();
 
-  pthread_exit(NULL);
-}
+		getData ( *data->input , probN , probData );
 
-void *thread_fun3(void *arg)
-{
- 
-  NonogramSolverWrapper;
+		if ( !solver.doSolve ( probData ) ) {}
 
-  pthread_exit(NULL);
-}
+		Board ans = solver.getSolvedBoard();
 
-void *thread_fun4(void *arg)
-{
- 
-  NonogramSolverWrapper;
-
-  pthread_exit(NULL);
-}
-
-void writePerDuration(const Options& option, int probN, time_t startTime, clock_t thisClock , clock_t startClock )
-{
-		if(!option.simple)
-		{
-			printf ( "$%3d\ttime:%4lfs\ttotal:%ld\n" , probN , (double)(clock()-thisClock)/CLOCKS_PER_SEC, time(NULL)-startTime);
+		if ( data->option->selfCheck && !checkAns ( ans, probData ) ) {
+			printf ( "Fatal Error: Answer not correct\n" );
+			continue;
 		}
-		else
-		{
-			if( probN%100==0 )
-				printf("%3d\t%4ld\t%11.6lf\n",probN,time(NULL)-startTime,(double)(clock()-startClock)/CLOCKS_PER_SEC);
-		}
 
-		if(option.keeplog)
-		{
-			FILE* log = fopen( option.logFileName , "a+" );
-			fprintf ( log , "%3d\t\t%11.6lf\n" , probN
-					, (double)(clock()-thisClock)/CLOCKS_PER_SEC);
-			fclose(log);
-		}
+		result->answer[i] = ans;
+		
+		writePerDuration ( *data->option, probN, data->startTime, result->clk[i], data->startClk ); //一題一題印
+	}
+
+	return result;
 }
 
-void writeTotalDuration(const Options& option, time_t startTime, clock_t startClk )
+void writePerDuration ( const Options &option, int probN, time_t startTime, clock_t thisClock , clock_t startClock )
 {
-	printf("Total:\n%4ld\t%11.6lf\n",time(NULL)-startTime,(double)(clock()-startClk)/CLOCKS_PER_SEC);
-	if(option.keeplog)
-	{
-		FILE* log = fopen( option.logFileName , "a+" );
-		fprintf(log,"Total:\n%4ld\t%11.6lf\n",time(NULL)-startTime,(double)(clock()-startClk)/CLOCKS_PER_SEC);
-		fclose(log);
+	if ( !option.simple ) {
+		printf ( "$%3d\ttime:%4lfs\ttotal:%ld\n" , probN , ( double ) ( clock() - thisClock ) / CLOCKS_PER_SEC, time ( NULL ) - startTime );
+	}
+	else {
+		if ( probN % 100 == 0 )
+			printf ( "%3d\t%4ld\t%11.6lf\n", probN, time ( NULL ) - startTime, ( double ) ( clock() - startClock ) / CLOCKS_PER_SEC );
+	}
+#ifndef __USE_THREAD__
+	if ( option.keeplog ) {
+		FILE *log = fopen ( option.logFileName , "a+" );
+		fprintf ( log , "%3d\t\t%11.6lf\n" , probN
+				  , ( double ) ( clock() - thisClock ) / CLOCKS_PER_SEC );
+		fclose ( log );
+	}
+#endif
+}
+
+void writeTotalDuration ( const Options &option, time_t startTime, clock_t startClk )
+{
+	printf ( "Total:\n%4ld\t%11.6lf\n", time ( NULL ) - startTime, ( double ) ( clock() - startClk ) / CLOCKS_PER_SEC );
+
+	if ( option.keeplog ) {
+		FILE *log = fopen ( option.logFileName , "a+" );
+		fprintf ( log, "Total:\n%4ld\t%11.6lf\n", time ( NULL ) - startTime, ( double ) ( clock() - startClk ) / CLOCKS_PER_SEC );
+		fclose ( log );
 	}
 }
 
-int main(int argc , char *argv[])
+int main ( int argc , char *argv[] )
 {
 	Options option;
-	if(!option.readOptions(argc, argv))
-	{
-		printf("\nAborted: Illegal Options.\n");
+
+	if ( !option.readOptions ( argc, argv ) ) {
+		printf ( "\nAborted: Illegal Options.\n" );
 		return 0;
 	}
 
-	if(option.genLogFile())
-	{
-		printf("\nopen log(%s) and write info failed\n",option.logFileName);
+	if ( option.genLogFile() ) {
+		printf ( "\nopen log(%s) and write info failed\n", option.logFileName );
 		return 0;
 	}
 
-	clearFile(option.outputFileName);
+	clearFile ( option.outputFileName );
 
 	int *inputData;
-	int probData[50*14];
-	inputData = allocMem(1001*50*14);
-	readFile(option.inputFileName,inputData);
+	int probData[50 * 14];
+	inputData = allocMem ( 1001 * 50 * 14 );
+	readFile ( option.inputFileName, inputData );
 
-	time_t startTime = time(NULL);
+	time_t startTime = time ( NULL );
 	clock_t startClk = clock();
 	clock_t thisClk;
-    
-	NonogramSolver nngSolver;   
-	nngSolver.setMethod(option.method);
+
+	NonogramSolver nngSolver;
+	nngSolver.setMethod ( option.method );
 	initialHash();
 
-	vector<Board> answer;
-	answer.resize(option.problemEnd-option.problemStart+1);
-	pthread_t thread1,thread2,thread3,thread4;
-	for( int probN = option.problemStart ; probN <= option.problemEnd ; ++probN )
-	{
+#ifdef __USE_THREAD__
+	data_t **datapool;
+	pool.max = 100;
+	int total = 4;
+	datapool = (data_t**) malloc(sizeof(data_t*) * total);
+	memset(datapool, 0, sizeof(data_t*) * total);
+	if (initPool ( total ) < 0) {
+		return 1;
+	}
+	for (int i = 0; i < total; ++i) {
+		data_t *data = (data_t*)malloc(sizeof(data_t));
+		memset(data, 0, sizeof(data_t));
+		data->option = &option;
+		data->total = total;
+		data->startTime = startTime;
+		data->startClk = startClk;
+		data->input = &inputData;
+		data->id = i;
+		datapool[i] = data;
+		addThread(NonogramSolverWrapper, data);
+	}
+	for (int i = 0; i < total; ++i) {
+		waitResult();
+	}
+	for ( int probN = option.problemStart ; probN <= option.problemEnd ; ++probN ) {
+		result_t *res = (result_t*)pool.info[probN % total].ret;
+		int index = (probN - 1) % total;
+		if (res != NULL) {
+			printBoard ( option.outputFileName, res->answer[index], probN );
+		}
+	}
+	for ( int i = 0; i < total; ++i ) {
+		result_t *res = (result_t*)pool.info[i].ret;
+		if (datapool[i] != NULL) {
+			free(datapool[i]);
+		}
+		if (res != NULL) {
+			if (res->clk != NULL) {
+				free(res->clk);
+				res->clk = NULL;
+			}
+			free(pool.info[i].ret);
+			pool.info[i].ret = NULL;
+		}
+		
+	}
+	free(datapool);
+	datapool = NULL;
+#else
+	answer.resize ( option.problemEnd - option.problemStart + 1 );
+
+	for ( int probN = option.problemStart ; probN <= option.problemEnd ; ++probN ) {
 		thisClk = clock();
 
-		getData( inputData ,probN ,probData ); 
-	   
-	    pthread_t thread1,thread2,thread3,thread4; 
-	    
-        pthread_create(&thread1, NULL, thread_fun1, &nngSolver);  // 執行緒1
-        pthread_create(&thread2, NULL, thread_fun2, &nngSolver);  // 執行緒2
-        pthread_create(&thread3, NULL, thread_fun3, &nngSolver);  // 執行緒3
-        pthread_create(&thread4, NULL, thread_fun4, &nngSolver);  // 執行緒4
-		pthread_join(thread1,NULL);
-        pthread_join(thread2,NULL);
-        pthread_join(thread3,NULL);
-        pthread_join(thread4,NULL);
-		 
-	    if( !nngSolver.doSolve(probData) ){}
-		Board ans = nngSolver.getSolvedBoard();   
+		getData ( inputData , probN , probData );
 
-		if( option.selfCheck && !checkAns(ans, probData) )
-		{
-			printf("Fatal Error: Answer not correct\n");
+		if ( !nngSolver.doSolve ( probData ) ) {}
+
+		Board ans = nngSolver.getSolvedBoard();
+
+		if ( option.selfCheck && !checkAns ( ans, probData ) ) {
+			printf ( "Fatal Error: Answer not correct\n" );
 			return 1;
 		}
 
-		answer[probN-option.problemStart] = ans;
-  
-		writePerDuration(option,probN,startTime,thisClk,startClk); //一題一題印 
-		printBoard(option.outputFileName, answer[probN-1], probN);
+		answer[probN - option.problemStart] = ans;
+
+		writePerDuration ( option, probN, startTime, thisClk, startClk ); //一題一題印
+		printBoard ( option.outputFileName, answer[probN - 1], probN );
 	}
+#endif
+
 	delete[] inputData;
 
 	//for( int probN = option.problemStart, i = 0 ; probN <= option.problemEnd ; ++probN, ++i )
-		//printBoard(option.outputFileName, answer[i], probN);
+	//printBoard(option.outputFileName, answer[i], probN);
 
-	writeTotalDuration(option,startTime,startClk);
+	writeTotalDuration ( option, startTime, startClk );
 
+#ifdef __USE_THREAD__
+	freePool();
+#endif
 	return 0;
 }
+
 
 

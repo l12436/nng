@@ -1,4 +1,5 @@
 #include "probsolver.h"
+#include "thread.h"
 
 int NonogramSolver::doSolve(int *data)
 {
