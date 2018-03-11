@@ -38,6 +38,7 @@ typedef struct {
 #ifdef __BLANACE__
 	probData_t *probDataState;
 #endif
+	FILE* log;
 }data_t;
 
 typedef struct {
@@ -49,12 +50,17 @@ typedef struct {
 pool_t pool;
 pthread_mutex_t mutex;
 pthread_mutex_t mutexIsSolved;
+pthread_mutex_t mutexWriteLog;
 
 #ifndef __USE_THREAD__
 vector<Board> answer;
 #endif
 
+#ifndef __USE_THREAD__
 void writePerDuration ( const Options &option, int probN, time_t startTime, clock_t thisClock , clock_t startClock );
+#else
+void writePerDuration ( const Options &option, int probN, time_t startTime, clock_t thisClock , clock_t startClock, FILE *log );
+#endif
 
 void *NonogramSolverWrapper ( void *arg )
 {
@@ -103,13 +109,17 @@ void *NonogramSolverWrapper ( void *arg )
 
 		result->answer[i] = ans;
 		
-		writePerDuration ( *data->option, probN, data->startTime, result->clk[i], data->startClk ); //一題一題印
+		writePerDuration ( *data->option, probN, data->startTime, result->clk[i], data->startClk, data->log ); //一題一題印
 	}
 
 	return result;
 }
 
+#ifndef __USE_THREAD__
 void writePerDuration ( const Options &option, int probN, time_t startTime, clock_t thisClock , clock_t startClock )
+#else
+void writePerDuration ( const Options &option, int probN, time_t startTime, clock_t thisClock , clock_t startClock, FILE *log )
+#endif
 {
 	if ( !option.simple ) {
 		printf ( "$%3d\ttime:%4lfs\ttotal:%ld\n" , probN , ( double ) ( clock() - thisClock ) / CLOCKS_PER_SEC, time ( NULL ) - startTime );
@@ -118,14 +128,21 @@ void writePerDuration ( const Options &option, int probN, time_t startTime, cloc
 		if ( probN % 100 == 0 )
 			printf ( "%3d\t%4ld\t%11.6lf\n", probN, time ( NULL ) - startTime, ( double ) ( clock() - startClock ) / CLOCKS_PER_SEC );
 	}
-#ifndef __USE_THREAD__
 	if ( option.keeplog ) {
+#ifdef __USE_THREAD__
+		pthread_mutex_lock(&mutexWriteLog);
+#else
 		FILE *log = fopen ( option.logFileName , "a+" );
+#endif
 		fprintf ( log , "%3d\t\t%11.6lf\n" , probN
 				  , ( double ) ( clock() - thisClock ) / CLOCKS_PER_SEC );
+		fflush(log);
+#ifdef __USE_THREAD__
+		pthread_mutex_unlock(&mutexWriteLog);
+#else
 		fclose ( log );
-	}
 #endif
+	}
 }
 
 void writeTotalDuration ( const Options &option, time_t startTime, clock_t startClk )
@@ -147,6 +164,9 @@ int main ( int argc , char *argv[] )
 		printf ( "\nAborted: Illegal Options.\n" );
 		return 0;
 	}
+	
+	strcpy(option.logFileName, "log.txt");
+	option.keeplog = true;
 
 	if ( option.genLogFile() ) {
 		printf ( "\nopen log(%s) and write info failed\n", option.logFileName );
@@ -170,6 +190,7 @@ int main ( int argc , char *argv[] )
 
 #ifdef __USE_THREAD__
 	data_t **datapool;
+	FILE *fp = fopen ( option.logFileName , "a+" );
 	pool.max = 100;
 	int total = 4;
 	datapool = (data_t**) malloc(sizeof(data_t*) * total);
@@ -179,6 +200,7 @@ int main ( int argc , char *argv[] )
 	}
 #ifdef __BLANACE__
 		pthread_mutex_init(&mutexIsSolved, NULL);
+		pthread_mutex_init(&mutexWriteLog, NULL);
 		probData_t *probDataState = (probData_t*)malloc(sizeof(probData_t) * option.problemEnd);
 		memset(probDataState, 0, sizeof(probData_t) * option.problemEnd);
 #endif
@@ -192,6 +214,7 @@ int main ( int argc , char *argv[] )
 		data->input = &inputData;
 		data->id = i;
 		data->probDataState = probDataState;
+		data->log = fp;
 		datapool[i] = data;
 		addThread(NonogramSolverWrapper, data);
 	}
@@ -257,9 +280,11 @@ int main ( int argc , char *argv[] )
 	freePool();
 #endif
 #ifdef __BLANACE__
-	pthread_mutex_destroy(&mutexIsSolved );
+	pthread_mutex_destroy(&mutexIsSolved);
+	pthread_mutex_destroy(&mutexWriteLog);
 	if (probDataState != NULL)
 		free( probDataState );
+	fclose(fp);
 #endif
 	return 0;
 }
