@@ -68,16 +68,28 @@ void *NonogramSolverWrapper ( void *arg )
 	data_t *data = (data_t*)arg;
 	NonogramSolver solver;
 	result_t *result = (result_t*)malloc(sizeof(result_t));
+#ifdef __BLANACE__
+	clock_t *clk = (clock_t*)malloc(sizeof(clock_t) * (data->option->problemEnd));
+#else
 	clock_t *clk = (clock_t*)malloc(sizeof(clock_t) * (data->option->problemEnd / data->total));
+#endif
 	int i = 0;
 	
 	memset(result, 0, sizeof(result_t));
+#ifdef __BLANACE__
+	memset(clk, 0, (data->option->problemEnd));
+#else
 	memset(clk, 0, (data->option->problemEnd / data->total));
+#endif
 	result->clk = clk;
 	solver.setMethod ( data->option->method );
 	initialHash();
 	
+#ifdef __BLANACE__
 	result->answer.resize ( (data->option->problemEnd - data->option->problemStart + 1) );
+#else
+	result->answer.resize ( (data->option->problemEnd - data->option->problemStart + 1) / data->total );
+#endif
 
 #ifdef __BLANACE__
 	for ( int probN = 1 ; probN <= data->option->problemEnd; ++probN, ++i ) {
@@ -182,7 +194,7 @@ int main ( int argc , char *argv[] )
 
 	time_t startTime = time ( NULL );
 	clock_t startClk = clock();
-	clock_t thisClk;
+// 	clock_t thisClk;
 
 	NonogramSolver nngSolver;
 	nngSolver.setMethod ( option.method );
