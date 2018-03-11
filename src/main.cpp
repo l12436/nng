@@ -10,6 +10,7 @@
 #include "options.h"
 
 #define __USE_THREAD__
+#define __BLANACE__
 
 using namespace std;
 
@@ -21,6 +22,12 @@ using namespace std;
  * time_t support bigger range but only count by seconds
  */
 
+#ifdef __BLANACE__
+typedef struct {
+	bool isSolved;
+} probData_t;
+#endif
+
 typedef struct {
 	Options *option;
 	int **input;
@@ -28,6 +35,9 @@ typedef struct {
 	int32_t total;
 	time_t startTime;
 	clock_t startClk;
+#ifdef __BLANACE__
+	probData_t *probDataState;
+#endif
 }data_t;
 
 typedef struct {
@@ -38,6 +48,7 @@ typedef struct {
 
 pool_t pool;
 pthread_mutex_t mutex;
+pthread_mutex_t mutexIsSolved;
 
 #ifndef __USE_THREAD__
 vector<Board> answer;
@@ -58,13 +69,27 @@ void *NonogramSolverWrapper ( void *arg )
 	memset(clk, 0, (data->option->problemEnd / data->total));
 	result->clk = clk;
 	solver.setMethod ( data->option->method );
-	initialHash();	
+	initialHash();
 	
-	result->answer.resize ( (data->option->problemEnd - data->option->problemStart + 1) / data->total );
+	result->answer.resize ( (data->option->problemEnd - data->option->problemStart + 1) );
 
+#ifdef __BLANACE__
+	for ( int probN = 1 ; probN <= data->option->problemEnd; ++probN, ++i ) {
+#else
 	for ( int probN = data->id + 1 ; probN <= data->option->problemEnd; probN+=data->total, ++i ) {
+#endif
 		result->clk[i] = clock();
-
+#ifdef __BLANACE__
+		pthread_mutex_lock(&mutexIsSolved);
+		if ( data->probDataState[i].isSolved ) {
+			pthread_mutex_unlock(&mutexIsSolved);
+			continue;
+		}
+		else {
+			data->probDataState[i].isSolved = true;	
+		}
+		pthread_mutex_unlock(&mutexIsSolved);
+#endif
 		getData ( *data->input , probN , probData );
 
 		if ( !solver.doSolve ( probData ) ) {}
@@ -131,7 +156,7 @@ int main ( int argc , char *argv[] )
 	clearFile ( option.outputFileName );
 
 	int *inputData;
-	int probData[50 * 14];
+// 	int probData[50 * 14];
 	inputData = allocMem ( 1001 * 50 * 14 );
 	readFile ( option.inputFileName, inputData );
 
@@ -152,6 +177,11 @@ int main ( int argc , char *argv[] )
 	if (initPool ( total ) < 0) {
 		return 1;
 	}
+#ifdef __BLANACE__
+		pthread_mutex_init(&mutexIsSolved, NULL);
+		probData_t *probDataState = (probData_t*)malloc(sizeof(probData_t) * option.problemEnd);
+		memset(probDataState, 0, sizeof(probData_t) * option.problemEnd);
+#endif
 	for (int i = 0; i < total; ++i) {
 		data_t *data = (data_t*)malloc(sizeof(data_t));
 		memset(data, 0, sizeof(data_t));
@@ -161,6 +191,7 @@ int main ( int argc , char *argv[] )
 		data->startClk = startClk;
 		data->input = &inputData;
 		data->id = i;
+		data->probDataState = probDataState;
 		datapool[i] = data;
 		addThread(NonogramSolverWrapper, data);
 	}
@@ -224,6 +255,11 @@ int main ( int argc , char *argv[] )
 
 #ifdef __USE_THREAD__
 	freePool();
+#endif
+#ifdef __BLANACE__
+	pthread_mutex_destroy(&mutexIsSolved );
+	if (probDataState != NULL)
+		free( probDataState );
 #endif
 	return 0;
 }
