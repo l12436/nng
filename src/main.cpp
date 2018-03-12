@@ -49,8 +49,10 @@ typedef struct {
 
 pool_t pool;
 pthread_mutex_t mutex;
-pthread_mutex_t mutexIsSolved;
 pthread_mutex_t mutexWriteLog;
+#ifdef __BLANACE__
+pthread_mutex_t mutexIsSolved;
+#endif
 
 #ifndef __USE_THREAD__
 vector<Board> answer;
@@ -210,11 +212,13 @@ int main ( int argc , char *argv[] )
 	if (initPool ( total ) < 0) {
 		return 1;
 	}
+#ifdef __USE_THREAD__
+	pthread_mutex_init(&mutexWriteLog, NULL);
+#endif
 #ifdef __BLANACE__
-		pthread_mutex_init(&mutexIsSolved, NULL);
-		pthread_mutex_init(&mutexWriteLog, NULL);
-		probData_t *probDataState = (probData_t*)malloc(sizeof(probData_t) * option.problemEnd);
-		memset(probDataState, 0, sizeof(probData_t) * option.problemEnd);
+	pthread_mutex_init(&mutexIsSolved, NULL);
+	probData_t *probDataState = (probData_t*)malloc(sizeof(probData_t) * option.problemEnd);
+	memset(probDataState, 0, sizeof(probData_t) * option.problemEnd);
 #endif
 	for (int i = 0; i < total; ++i) {
 		data_t *data = (data_t*)malloc(sizeof(data_t));
@@ -225,7 +229,9 @@ int main ( int argc , char *argv[] )
 		data->startClk = startClk;
 		data->input = &inputData;
 		data->id = i;
+#ifdef __BLANACE__
 		data->probDataState = probDataState;
+#endif
 		data->log = fp;
 		datapool[i] = data;
 		addThread(NonogramSolverWrapper, data);
@@ -290,10 +296,10 @@ int main ( int argc , char *argv[] )
 
 #ifdef __USE_THREAD__
 	freePool();
+	pthread_mutex_destroy(&mutexWriteLog);
 #endif
 #ifdef __BLANACE__
 	pthread_mutex_destroy(&mutexIsSolved);
-	pthread_mutex_destroy(&mutexWriteLog);
 	if (probDataState != NULL)
 		free( probDataState );
 	fclose(fp);
