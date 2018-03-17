@@ -82,8 +82,10 @@ void *NonogramSolverWrapper ( void *arg )
 	clock_t *clk = (clock_t*)malloc(sizeof(clock_t) * (data->option->problemEnd / data->total));
 #endif
 	int i = 0;
+	int ansIndex = 0;
 	
 	memset(result, 0, sizeof(result_t));
+	result->totalSolved = 0;
 #ifdef __BLANACE__
 	memset(clk, 0, (data->option->problemEnd));
 #else
@@ -127,13 +129,14 @@ void *NonogramSolverWrapper ( void *arg )
 			continue;
 		}
 
-		result->answer[i].Id = probN;
-		result->answer[i].board = ans;
+		result->answer[ansIndex].Id = probN;
+		result->answer[ansIndex].board = ans;
 		
 		writePerDuration ( *data->option, probN, data->startTime, result->clk[i], data->startClk, data->log ); //一題一題印
+		ansIndex++;
 	}
 	
-	result->totalSolved = i;
+	result->totalSolved = ansIndex;
 
 	return result;
 }
