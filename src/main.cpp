@@ -42,8 +42,13 @@ typedef struct {
 }data_t;
 
 typedef struct {
+	Board board;
+	int Id;
+} answer_t;
+
+typedef struct {
 	clock_t *clk;
-	vector<Board> answer;
+	vector<answer_t> answer;
 	int total;
 } result_t;
 
@@ -121,7 +126,8 @@ void *NonogramSolverWrapper ( void *arg )
 			continue;
 		}
 
-		result->answer[i] = ans;
+		result->answer[i].Id = probN;
+		result->answer[i].board = ans;
 		
 		writePerDuration ( *data->option, probN, data->startTime, result->clk[i], data->startClk, data->log ); //一題一題印
 	}
@@ -243,7 +249,7 @@ int main ( int argc , char *argv[] )
 		result_t *res = (result_t*)pool.info[probN % total].ret;
 		int index = (probN - 1) % total;
 		if (res != NULL) {
-			printBoard ( option.outputFileName, res->answer[index], probN );
+			printBoard ( option.outputFileName, res->answer[index].board, res->answer[index].Id );
 		}
 	}
 	for ( int i = 0; i < total; ++i ) {
