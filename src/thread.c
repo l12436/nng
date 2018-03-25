@@ -9,8 +9,8 @@ typedef struct {
 	int sum;
 } data_t;
 
-extern pool_t pool;
-extern pthread_mutex_t mutex;
+pool_t pool;
+pthread_mutex_t mutex;
 
 
 void *threadFunction(void *msg) {

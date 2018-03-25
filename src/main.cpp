@@ -53,11 +53,12 @@ typedef struct {
 	int total;
 } result_t;
 
-pool_t pool;
-pthread_mutex_t mutex;
+#ifdef __USE_THREAD__
+extern pool_t pool;
 pthread_mutex_t mutexWriteLog;
 #ifdef __BLANACE__
 pthread_mutex_t mutexIsSolved;
+#endif
 #endif
 
 #ifndef __USE_THREAD__
