@@ -6,6 +6,14 @@
 #include <unistd.h>
 using namespace std;
 
+// #define __USE_THREAD_FP__
+
+#ifdef __USE_THREAD_FP__
+#include "thread.h"
+
+extern pool_t pool;
+#endif
+
 int fp2 ( FullyProbe& fp , LineSolve& ls , Board& board )
 {
 
@@ -203,6 +211,76 @@ int probe( FullyProbe& fp , LineSolve& ls , Board &board , int pX ,int pY )
 	return INCOMP;
 }
 
+#ifdef __USE_THREAD_FP__
+
+pthread_mutex_t mutexIsSolved;
+pthread_mutex_t mutexOldP;
+
+typedef struct {
+	bool isSolved;
+} probData_t;
+
+typedef struct {
+	Board *newG;
+	FullyProbe *fp;
+	probData_t *status;
+	int id;
+	int pX;
+	int pY;
+	uint64_t pVal;
+} fp_data_t;
+
+void* thread_probeG (void *arg) {
+	int pX = 0;
+	int pY = 0;
+	uint64_t pVal = 0;
+	Board *newG = NULL;
+	FullyProbe *fp = NULL;
+
+	fp_data_t *data = (fp_data_t*)arg;
+	newG = data->newG;
+	fp = data->fp;
+	pX = data->pX;
+	pY = data->pY;
+	pVal = data->pVal;
+
+	for( int _x = data->id ; _x < 25 ; ++_x )
+	{
+		pthread_mutex_lock(&mutexIsSolved);
+		if ( data->status[_x].isSolved ) {
+			pthread_mutex_unlock(&mutexIsSolved);
+			continue;
+		}
+		else {
+			data->status[_x].isSolved = true;	
+		}
+		pthread_mutex_unlock(&mutexIsSolved);
+
+		uint64_t tmp = newG->data[_x] ^fp->gp[pX][pY][pVal].data[_x];
+		if( !tmp )
+			continue;
+		
+		int pos = 0;
+
+		while( 0 != (pos=__builtin_ffsll(tmp)) )
+		{
+			pos--;
+			tmp &= tmp-1;
+			int _y = pos>>1,
+				_v = pos&1;
+
+			if(_x!=pX&&_y!=pY)
+			{
+				pthread_mutex_lock(&mutexOldP);
+				fp->oldP.insert( _x*25 + _y );
+				pthread_mutex_unlock(&mutexOldP);
+				setBit( fp->gp[_x][_y][_v] , pX , pY , ( !(pVal==0) ? BIT_ZERO : BIT_ONE ) );
+			}
+		}
+	}
+}
+#endif
+
 int probeG( FullyProbe& fp ,LineSolve& ls ,int pX ,int pY ,uint64_t pVal )
 {
 	pVal -= BIT_ZERO;
@@ -212,6 +290,48 @@ int probeG( FullyProbe& fp ,LineSolve& ls ,int pX ,int pY ,uint64_t pVal )
 		return newGstate;
 
 #ifdef FP2
+#ifdef __USE_THREAD_FP__
+	int total = 4;
+	pool.max = 100;
+	if (initPool(total) < 0) {
+		return CONFLICT;
+	}
+	fp_data_t **datapool = (fp_data_t**) malloc(sizeof(fp_data_t*) * total);
+	memset( datapool, 0, sizeof(fp_data_t*) * total);
+	probData_t *status = (probData_t*)malloc(sizeof(probData_t) * 2 * 25 * 25);
+	memset(status, 0, sizeof(probData_t) * 2 * 25 * 25);
+	pthread_mutex_init(&mutexIsSolved, NULL);
+	pthread_mutex_init(&mutexOldP, NULL);
+	
+	for (int i = 0; i < total; ++i) {
+		fp_data_t* data = (fp_data_t*)malloc(sizeof(fp_data_t));
+		memset(data, 0, sizeof(fp_data_t));
+		data->id = i;
+		data->status = status;
+		data->newG = &newG;
+		data->fp = &fp;
+		data->pX = pX;
+		data->pY = pY;
+		data->pVal = pVal;
+		datapool[i] = data;
+		addThread(thread_probeG, data);
+	}
+
+	for (int i = 0; i < total; ++i) {
+		waitResult();
+	}
+
+	for (int i = 0; i < total; ++i) {
+		if (datapool[i] != NULL) {
+			free(datapool[i]);
+		}
+	}
+	free(datapool);
+	free(status);
+	pthread_mutex_destroy(&mutexIsSolved);
+	pthread_mutex_destroy(&mutexOldP);
+	freePool();
+#else
 	for( int _x = 0 ; _x < 25 ; ++_x )
 	{
 		uint64_t tmp = newG.data[_x] ^fp.gp[pX][pY][pVal].data[_x];
@@ -234,6 +354,7 @@ int probeG( FullyProbe& fp ,LineSolve& ls ,int pX ,int pY ,uint64_t pVal )
 			}
 		}
 	}
+#endif
 #endif
 
 	fp.gp[pX][pY][pVal] = newG;
