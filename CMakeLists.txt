@@ -4,7 +4,6 @@ project(test)
 
 add_definitions(
 -D__DEBUG__
--DFP2
 )
 
 link_libraries(main pthread)
