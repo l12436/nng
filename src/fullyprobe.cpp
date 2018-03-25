@@ -270,6 +270,13 @@ int probe( FullyProbe& fp , LineSolve& ls , Board &board , int pX ,int pY )
 	
 	free(data);
 	freePool();
+	
+	if (p0 == SOLVED) {
+		return SOLVED;
+	}
+	if( p1 == SOLVED ) {
+		return SOLVED;
+	}
 #else
 	for( int i = 0 ; i < 50 ; ++i )
 	{
