@@ -2,7 +2,10 @@ cmake_minimum_required(VERSION 2.6)
 
 project(test)
 
-add_definitions(-D__DEBUG__)
+add_definitions(
+-D__DEBUG__
+-DFP2
+)
 
 link_libraries(main pthread)
 

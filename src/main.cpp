@@ -9,8 +9,8 @@
 #include "probsolver.h"
 #include "options.h"
 
-#define __USE_THREAD__
-#define __BLANACE__
+// #define __USE_THREAD__
+// #define __BLANACE__
 
 using namespace std;
 
@@ -65,11 +65,47 @@ vector<Board> answer;
 #endif
 
 #ifndef __USE_THREAD__
-void writePerDuration ( const Options &option, int probN, time_t startTime, clock_t thisClock , clock_t startClock );
+void writePerDuration ( const Options &option, int probN, time_t startTime, clock_t thisClock , clock_t startClock )
 #else
-void writePerDuration ( const Options &option, int probN, time_t startTime, clock_t thisClock , clock_t startClock, FILE *log );
+void writePerDuration ( const Options &option, int probN, time_t startTime, clock_t thisClock , clock_t startClock, FILE *log )
 #endif
+{
+	if ( !option.simple ) {
+		printf ( "$%3d\ttime:%4lfs\ttotal:%ld\n" , probN , ( double ) ( clock() - thisClock ) / CLOCKS_PER_SEC, time ( NULL ) - startTime );
+	}
+	else {
+		if ( probN % 100 == 0 )
+			printf ( "%3d\t%4ld\t%11.6lf\n", probN, time ( NULL ) - startTime, ( double ) ( clock() - startClock ) / CLOCKS_PER_SEC );
+	}
+	if ( option.keeplog ) {
+#ifdef __USE_THREAD__
+		pthread_mutex_lock(&mutexWriteLog);
+#else
+		FILE *log = fopen ( option.logFileName , "a+" );
+#endif
+		fprintf ( log , "%3d\t\t%11.6lf\n" , probN
+				  , ( double ) ( clock() - thisClock ) / CLOCKS_PER_SEC );
+		fflush(log);
+#ifdef __USE_THREAD__
+		pthread_mutex_unlock(&mutexWriteLog);
+#else
+		fclose ( log );
+#endif
+	}
+}
 
+void writeTotalDuration ( const Options &option, time_t startTime, clock_t startClk )
+{
+	printf ( "Total:\n%4ld\t%11.6lf\n", time ( NULL ) - startTime, ( double ) ( clock() - startClk ) / CLOCKS_PER_SEC );
+
+	if ( option.keeplog ) {
+		FILE *log = fopen ( option.logFileName , "a+" );
+		fprintf ( log, "Total:\n%4ld\t%11.6lf\n", time ( NULL ) - startTime, ( double ) ( clock() - startClk ) / CLOCKS_PER_SEC );
+		fclose ( log );
+	}
+}
+
+#ifdef __USE_THREAD__
 void *NonogramSolverWrapper ( void *arg )
 {
 	int probData[50 * 14];
@@ -140,47 +176,7 @@ void *NonogramSolverWrapper ( void *arg )
 
 	return result;
 }
-
-#ifndef __USE_THREAD__
-void writePerDuration ( const Options &option, int probN, time_t startTime, clock_t thisClock , clock_t startClock )
-#else
-void writePerDuration ( const Options &option, int probN, time_t startTime, clock_t thisClock , clock_t startClock, FILE *log )
 #endif
-{
-	if ( !option.simple ) {
-		printf ( "$%3d\ttime:%4lfs\ttotal:%ld\n" , probN , ( double ) ( clock() - thisClock ) / CLOCKS_PER_SEC, time ( NULL ) - startTime );
-	}
-	else {
-		if ( probN % 100 == 0 )
-			printf ( "%3d\t%4ld\t%11.6lf\n", probN, time ( NULL ) - startTime, ( double ) ( clock() - startClock ) / CLOCKS_PER_SEC );
-	}
-	if ( option.keeplog ) {
-#ifdef __USE_THREAD__
-		pthread_mutex_lock(&mutexWriteLog);
-#else
-		FILE *log = fopen ( option.logFileName , "a+" );
-#endif
-		fprintf ( log , "%3d\t\t%11.6lf\n" , probN
-				  , ( double ) ( clock() - thisClock ) / CLOCKS_PER_SEC );
-		fflush(log);
-#ifdef __USE_THREAD__
-		pthread_mutex_unlock(&mutexWriteLog);
-#else
-		fclose ( log );
-#endif
-	}
-}
-
-void writeTotalDuration ( const Options &option, time_t startTime, clock_t startClk )
-{
-	printf ( "Total:\n%4ld\t%11.6lf\n", time ( NULL ) - startTime, ( double ) ( clock() - startClk ) / CLOCKS_PER_SEC );
-
-	if ( option.keeplog ) {
-		FILE *log = fopen ( option.logFileName , "a+" );
-		fprintf ( log, "Total:\n%4ld\t%11.6lf\n", time ( NULL ) - startTime, ( double ) ( clock() - startClk ) / CLOCKS_PER_SEC );
-		fclose ( log );
-	}
-}
 
 int main ( int argc , char *argv[] )
 {
@@ -202,13 +198,17 @@ int main ( int argc , char *argv[] )
 	clearFile ( option.outputFileName );
 
 	int *inputData;
-// 	int probData[50 * 14];
+#ifndef __USE_THREAD__
+	int probData[50 * 14];
+#endif
 	inputData = allocMem ( 1001 * 50 * 14 );
 	readFile ( option.inputFileName, inputData );
 
 	time_t startTime = time ( NULL );
 	clock_t startClk = clock();
-// 	clock_t thisClk;
+#ifndef __USE_THREAD__
+	clock_t thisClk;
+#endif
 
 	NonogramSolver nngSolver;
 	nngSolver.setMethod ( option.method );
