@@ -6,9 +6,9 @@
 #include <unistd.h>
 using namespace std;
 
-// #define __USE_THREAD_FP__
+#define __USE_THREAD_PROBE__
 
-#ifdef __USE_THREAD_FP__
+#ifdef __USE_THREAD_PROBE__
 #include "thread.h"
 
 extern pool_t pool;
@@ -170,9 +170,107 @@ double choose( int method , double mp1 , double mp0 )
 	}
 }
 
+#ifdef __USE_THREAD_PROBE__
+typedef struct {
+	int pX;
+	int pY;
+	int ret;
+	FullyProbe *fp;
+	LineSolve *ls;
+	Board *board;
+} probe_data_t;
+
+void *probe0(void *arg) {
+	int pX = 0;
+	int pY = 0;
+	FullyProbe *fp = NULL;
+	LineSolve *ls = NULL;
+	Board *board = NULL;
+	probe_data_t *data = (probe_data_t*)arg;
+	int *ret = (int*)malloc(sizeof(int));
+	
+	pX = data->pX;
+	pY = data->pY;
+	fp = data->fp;
+	ls = data->ls;
+	board = data->board;
+
+	for( int i = 0 ; i < 50 ; ++i )
+	{
+		fp->gp[pX][pY][0].data[i] &= board->data[i];
+	}
+
+	int p0 = probeG( *fp ,*ls ,pX ,pY ,BIT_ZERO );
+	*ret = p0;
+	return ret;
+}
+
+void *probe1(void *arg) {
+	int pX = 0;
+	int pY = 0;
+	FullyProbe *fp = NULL;
+	LineSolve *ls = NULL;
+	Board *board = NULL;
+	probe_data_t *data = (probe_data_t*)arg;
+	int *ret = (int*)malloc(sizeof(int));
+
+	pX = data->pX;
+	pY = data->pY;
+	fp = data->fp;
+	ls = data->ls;
+	board = data->board;
+
+	for( int i = 0 ; i < 50 ; ++i )
+	{
+		fp->gp[pX][pY][1].data[i] &= board->data[i];
+	}
+
+	int p1 = probeG( *fp ,*ls ,pX ,pY ,BIT_ONE );
+	*ret = p1;
+	return ret;
+}
+#endif
+
 int probe( FullyProbe& fp , LineSolve& ls , Board &board , int pX ,int pY )
 {
 
+#ifdef __USE_THREAD_PROBE__
+	int total = 2;
+	int p0 = 0;
+	int p1 = 0;
+	
+	if (initPool(total)) {
+		return INCOMP;
+	}
+
+	probe_data_t **data = (probe_data_t**)malloc(sizeof(probe_data_t*) * total);
+	for (int i = 0; i < total; ++i) {
+		probe_data_t *d = (probe_data_t*)malloc(sizeof(probe_data_t));
+		data[i] = d;
+		data[i]->board = &board;
+		data[i]->fp = &fp;
+		data[i]->ls = &ls;
+		data[i]->pX = pX;
+		data[i]->pY = pY;
+	}
+	addThread(probe0, data[0]);
+	addThread(probe1, data[1]);
+	
+	for (int i = 0; i < total; ++i) {
+		waitResult();
+	}
+	p0 = *((int *)pool.info[0].ret);
+	p1 = *((int *)pool.info[1].ret);
+	for (int i = 0; i < total; ++i) {
+		if (data[i] != NULL) {
+			free(data[i]);
+		}
+		free(pool.info[i].ret);
+	}
+	
+	free(data);
+	freePool();
+#else
 	for( int i = 0 ; i < 50 ; ++i )
 	{
 		fp.gp[pX][pY][0].data[i] &= board.data[i];
@@ -189,6 +287,7 @@ int probe( FullyProbe& fp , LineSolve& ls , Board &board , int pX ,int pY )
 	{
 		return SOLVED;
 	}
+#endif
 
 	if( p0==CONFLICT && p1==CONFLICT )
 	{
